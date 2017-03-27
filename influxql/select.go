@@ -426,6 +426,13 @@ func buildExprIterator(expr Expr, ic IteratorCreator, sources Sources, opt Itera
 	}
 }
 
+// buildOrderedExprIterator is the same as buildExprIterator, but it forces the
+// built iterator to have ordered output.
+func buildOrderedExprIterator(expr Expr, ic IteratorCreator, sources Sources, opt IteratorOptions, selector bool) (Iterator, error) {
+	opt.Ordered = true
+	return buildExprIterator(expr, ic, sources, opt, selector)
+}
+
 type exprIteratorBuilder struct {
 	ic       IteratorCreator
 	sources  Sources
@@ -708,7 +715,7 @@ func (b *exprIteratorBuilder) buildCallIterator(expr *Call) (Iterator, error) {
 	// TODO(jsternberg): Refactor this. This section needs to die in a fire.
 	switch expr.Name {
 	case "distinct":
-		input, err := buildExprIterator(expr.Args[0].(*VarRef), b.ic, b.sources, b.opt, b.selector)
+		input, err := buildOrderedExprIterator(expr.Args[0].(*VarRef), b.ic, b.sources, b.opt, b.selector)
 		if err != nil {
 			return nil, err
 		}
@@ -718,7 +725,7 @@ func (b *exprIteratorBuilder) buildCallIterator(expr *Call) (Iterator, error) {
 		}
 		return NewIntervalIterator(input, b.opt), nil
 	case "sample":
-		input, err := buildExprIterator(expr.Args[0], b.ic, b.sources, b.opt, b.selector)
+		input, err := buildOrderedExprIterator(expr.Args[0], b.ic, b.sources, b.opt, b.selector)
 		if err != nil {
 			return nil, err
 		}
@@ -726,7 +733,7 @@ func (b *exprIteratorBuilder) buildCallIterator(expr *Call) (Iterator, error) {
 
 		return newSampleIterator(input, b.opt, int(size.Val))
 	case "holt_winters", "holt_winters_with_fit":
-		input, err := buildExprIterator(expr.Args[0], b.ic, b.sources, b.opt, b.selector)
+		input, err := buildOrderedExprIterator(expr.Args[0], b.ic, b.sources, b.opt, b.selector)
 		if err != nil {
 			return nil, err
 		}
@@ -753,7 +760,7 @@ func (b *exprIteratorBuilder) buildCallIterator(expr *Call) (Iterator, error) {
 			}
 		}
 
-		input, err := buildExprIterator(expr.Args[0], b.ic, b.sources, opt, b.selector)
+		input, err := buildOrderedExprIterator(expr.Args[0], b.ic, b.sources, opt, b.selector)
 		if err != nil {
 			return nil, err
 		}
@@ -781,7 +788,7 @@ func (b *exprIteratorBuilder) buildCallIterator(expr *Call) (Iterator, error) {
 		}
 		panic(fmt.Sprintf("invalid series aggregate function: %s", expr.Name))
 	case "cumulative_sum":
-		input, err := buildExprIterator(expr.Args[0], b.ic, b.sources, b.opt, b.selector)
+		input, err := buildOrderedExprIterator(expr.Args[0], b.ic, b.sources, b.opt, b.selector)
 		if err != nil {
 			return nil, err
 		}
@@ -850,13 +857,11 @@ func (b *exprIteratorBuilder) buildCallIterator(expr *Call) (Iterator, error) {
 			}
 			return itr, nil
 		case "median":
-			opt := b.opt
-			opt.Ordered = true
-			input, err := buildExprIterator(expr.Args[0].(*VarRef), b.ic, b.sources, opt, false)
+			input, err := buildOrderedExprIterator(expr.Args[0].(*VarRef), b.ic, b.sources, b.opt, false)
 			if err != nil {
 				return nil, err
 			}
-			return newMedianIterator(input, opt)
+			return newMedianIterator(input, b.opt)
 		case "mode":
 			input, err := buildExprIterator(expr.Args[0].(*VarRef), b.ic, b.sources, b.opt, false)
 			if err != nil {
@@ -894,7 +899,7 @@ func (b *exprIteratorBuilder) buildCallIterator(expr *Call) (Iterator, error) {
 				}
 			}
 
-			input, err := buildExprIterator(expr.Args[0].(*VarRef), b.ic, b.sources, b.opt, false)
+			input, err := buildOrderedExprIterator(expr.Args[0].(*VarRef), b.ic, b.sources, b.opt, false)
 			if err != nil {
 				return nil, err
 			}
@@ -918,16 +923,14 @@ func (b *exprIteratorBuilder) buildCallIterator(expr *Call) (Iterator, error) {
 				}
 			}
 
-			input, err := buildExprIterator(expr.Args[0].(*VarRef), b.ic, b.sources, b.opt, false)
+			input, err := buildOrderedExprIterator(expr.Args[0].(*VarRef), b.ic, b.sources, b.opt, false)
 			if err != nil {
 				return nil, err
 			}
 			n := expr.Args[len(expr.Args)-1].(*IntegerLiteral)
 			return newBottomIterator(input, b.opt, n, tags)
 		case "percentile":
-			opt := b.opt
-			opt.Ordered = true
-			input, err := buildExprIterator(expr.Args[0].(*VarRef), b.ic, b.sources, opt, false)
+			input, err := buildOrderedExprIterator(expr.Args[0].(*VarRef), b.ic, b.sources, b.opt, false)
 			if err != nil {
 				return nil, err
 			}
@@ -938,7 +941,7 @@ func (b *exprIteratorBuilder) buildCallIterator(expr *Call) (Iterator, error) {
 			case *IntegerLiteral:
 				percentile = float64(arg.Val)
 			}
-			return newPercentileIterator(input, opt, percentile)
+			return newPercentileIterator(input, b.opt, percentile)
 		default:
 			return nil, fmt.Errorf("unsupported call: %s", expr.Name)
 		}
